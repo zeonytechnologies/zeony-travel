@@ -61,7 +61,6 @@
           "photosPermission": "Allow Zeony Travel to access your photos."
         }
       ],
-      "./withMappls.js",
       "expo-build-properties"
     ],
     "experiments": {

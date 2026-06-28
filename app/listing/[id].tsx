@@ -11,19 +11,7 @@ import { FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
-import Constants, { ExecutionEnvironment } from 'expo-constants';
-const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
-
-let MapplsGL: any = null;
-if (Platform.OS !== 'web' && !isExpoGo) {
-  try {
-    MapplsGL = require('mappls-map-react-native').default;
-    MapplsGL.setMapSDKKey('92986412724d75ceac8cb5dabeef2c5c');
-    MapplsGL.setRestAPIKey('92986412724d75ceac8cb5dabeef2c5c');
-    MapplsGL.setAtlasClientId('96dHZVzsAutvcrp10SUPTjFinjyUZtj4AHk2Bx_GSJPKZ0MfPfEncXGHh_VWDkIC9ZEUVm--FjQwgQW5JtJySJ3XiXx9PNpO');
-    MapplsGL.setAtlasClientSecret('lrFxI-iSEg_GvhgnGZuda8riQfYkOQPRnyF7V2ANpYQPhNjBfsR_fg-HAXdLnIv2yGmXgehXPBzCH-RcQPbHFotoemJ8m8S6EU8Z09pXRjQ=');
-  } catch (_) {}
-}
+import MapView, { Marker } from 'react-native-maps';
 
 const AMENITY_ICONS: Record<string, string> = {
   wifi: 'wifi',
@@ -213,18 +201,22 @@ export default function ListingDetailScreen() {
               <View style={styles.divider} />
               <Text style={styles.sectionTitle}>Location</Text>
               <View style={styles.mapContainer}>
-                {Platform.OS !== 'web' && !isExpoGo && MapplsGL ? (
-                  <MapplsGL.MapView style={styles.map}>
-                    <MapplsGL.Camera
-                      zoomLevel={14}
-                      centerCoordinate={[listing.longitude, listing.latitude]}
+                {Platform.OS !== 'web' ? (
+                  <MapView 
+                    style={styles.map}
+                    initialRegion={{
+                      latitude: listing.latitude,
+                      longitude: listing.longitude,
+                      latitudeDelta: 0.01,
+                      longitudeDelta: 0.01,
+                    }}
+                  >
+                    <Marker
+                      coordinate={{ latitude: listing.latitude, longitude: listing.longitude }}
+                      title={listing.title}
                     />
-                    <MapplsGL.PointAnnotation
-                      id="marker"
-                      coordinate={[listing.longitude, listing.latitude]}
-                    />
-                  </MapplsGL.MapView>
-                ) : Platform.OS === 'web' ? (
+                  </MapView>
+                ) : (
                   // @ts-ignore
                   <iframe
                     title="Location Map"
@@ -234,11 +226,6 @@ export default function ListingDetailScreen() {
                     src={`https://www.google.com/maps?q=${listing.latitude},${listing.longitude}&z=15&output=embed`}
                     allowFullScreen
                   />
-                ) : (
-                  <View style={[styles.map, { justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.borderLight }]}>
-                    <MaterialCommunityIcons name="map-marker-off" size={32} color={COLORS.textMuted} />
-                    <Text style={{ marginTop: 8, color: COLORS.textMuted, fontFamily: FONTS.medium }}>Map preview requires Dev Client</Text>
-                  </View>
                 )}
               </View>
               {/* Address info */}
