@@ -2,6 +2,7 @@
   "expo": {
     "name": "Zeony Travel",
     "slug": "zeony-travel",
+    "newArchEnabled": false,
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -49,13 +50,19 @@
       ],
       [
         "expo-notifications",
-        { "icon": "./assets/images/icon.png", "color": "#000000" }
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#000000"
+        }
       ],
       [
         "expo-image-picker",
-        { "photosPermission": "Allow Zeony Travel to access your photos." }
+        {
+          "photosPermission": "Allow Zeony Travel to access your photos."
+        }
       ],
-      "./withMappls.js"
+      "./withMappls.js",
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true
