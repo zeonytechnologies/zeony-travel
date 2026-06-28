@@ -8,10 +8,11 @@ import { supabase } from '../../lib/supabase';
 import { Listing, Review } from '../../types';
 import { COLORS, SIZES, FONTS, RADIUS } from '../../constants/theme';
 import { FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
 
 const { width } = Dimensions.get('window');
 
-import MapView, { Marker } from 'react-native-maps';
+
 
 const AMENITY_ICONS: Record<string, string> = {
   wifi: 'wifi',
@@ -200,38 +201,17 @@ export default function ListingDetailScreen() {
             <>
               <View style={styles.divider} />
               <Text style={styles.sectionTitle}>Location</Text>
-              <View style={styles.mapContainer}>
-                {Platform.OS !== 'web' ? (
-                  <MapView 
-                    style={styles.map}
-                    initialRegion={{
-                      latitude: listing.latitude,
-                      longitude: listing.longitude,
-                      latitudeDelta: 0.01,
-                      longitudeDelta: 0.01,
-                    }}
-                  >
-                    <Marker
-                      coordinate={{ latitude: listing.latitude, longitude: listing.longitude }}
-                      title={listing.title}
-                    />
-                  </MapView>
-                ) : (
-                  // @ts-ignore
-                  <iframe
-                    title="Location Map"
-                    width="100%"
-                    height="220"
-                    style={{ border: 0, borderRadius: 12 }}
-                    src={`https://www.google.com/maps?q=${listing.latitude},${listing.longitude}&z=15&output=embed`}
-                    allowFullScreen
-                  />
-                )}
-              </View>
-              {/* Address info */}
               <View style={styles.addressCard}>
                 <FontAwesome name="map-marker" size={16} color={COLORS.primary} />
-                <Text style={styles.addressText}>{listing.location}, {listing.city}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.addressText}>{listing.location}, {listing.city}</Text>
+                </View>
+                <TouchableOpacity 
+                  style={{ backgroundColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}
+                  onPress={() => Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${listing.latitude},${listing.longitude}`)}
+                >
+                  <Text style={{ color: '#fff', fontSize: 12, fontFamily: FONTS.bold }}>View on Map</Text>
+                </TouchableOpacity>
               </View>
             </>
           )}
