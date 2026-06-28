@@ -1,59 +1,30 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Image } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
-import { COLORS, SIZES } from '../../constants/theme';
+import { COLORS, SIZES, FONTS, RADIUS } from '../../constants/theme';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 
+const LOGO = require('../../assets/images/icon.png');
+
 export default function LoginScreen() {
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { session } = useAuth();
 
-  // If already logged in, we shouldn't really be here, but let's handle it
-  // A proper _layout.tsx in (auth) or root will redirect to tabs if logged in.
-
-  const handleSendOtp = async () => {
-    if (!phone || phone.length < 10) {
-      Alert.alert('Error', 'Please enter a valid 10-digit phone number');
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter email and password');
       return;
     }
     
     setLoading(true);
     try {
-      const formattedPhone = phone.startsWith('+91') ? phone : `+91${phone}`;
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: formattedPhone,
-      });
-
-      if (error) throw error;
-      
-      setIsOtpSent(true);
-      Alert.alert('Success', 'OTP sent successfully!');
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (!otp || otp.length < 6) {
-      Alert.alert('Error', 'Please enter a valid 6-digit OTP');
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      const formattedPhone = phone.startsWith('+91') ? phone : `+91${phone}`;
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: formattedPhone,
-        token: otp,
-        type: 'sms',
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
       if (error) throw error;
@@ -65,21 +36,8 @@ export default function LoginScreen() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: 'exp://localhost:8081', // Update based on environment
-        },
-      });
-      if (error) throw error;
-      // The redirect is handled automatically by Supabase and deep linking
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
-      setLoading(false);
-    }
+  const handleSignUp = () => {
+    router.replace('/(auth)/register');
   };
 
   const checkProfileAndRedirect = async (userId: string | undefined) => {
@@ -99,11 +57,11 @@ export default function LoginScreen() {
       if (!data?.full_name) {
         router.replace('/(auth)/register');
       } else {
-        router.replace('/(tabs)/');
+        router.replace('/(tabs)');
       }
     } catch (error) {
       console.error(error);
-      router.replace('/(tabs)/'); // fallback
+      router.replace('/(tabs)'); // fallback
     } finally {
       setLoading(false);
     }
@@ -111,57 +69,49 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Zeony Travel</Text>
-      <Text style={styles.subtitle}>Welcome back! Please login to continue.</Text>
+      {/* Logo */}
+      <View style={styles.logoSection}>
+        <Image source={LOGO} style={styles.logo} resizeMode="contain" />
+        <Text style={styles.appName}>Zeony Travels</Text>
+      </View>
 
-      {!isOtpSent ? (
-        <>
-          <View style={styles.inputContainer}>
-            <Text style={styles.prefix}>+91</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter phone number"
-              keyboardType="phone-pad"
-              value={phone}
-              onChangeText={setPhone}
-              maxLength={10}
-            />
-          </View>
-          
-          <TouchableOpacity style={styles.primaryButton} onPress={handleSendOtp} disabled={loading}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Send OTP</Text>}
-          </TouchableOpacity>
-        </>
-      ) : (
-        <>
-          <TextInput
-            style={styles.inputFull}
-            placeholder="Enter 6-digit OTP"
-            keyboardType="number-pad"
-            value={otp}
-            onChangeText={setOtp}
-            maxLength={6}
-          />
-          
-          <TouchableOpacity style={styles.primaryButton} onPress={handleVerifyOtp} disabled={loading}>
-             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Verify OTP</Text>}
-          </TouchableOpacity>
-          
-          <TouchableOpacity onPress={() => setIsOtpSent(false)} style={styles.linkButton}>
-            <Text style={styles.linkText}>Change Phone Number</Text>
-          </TouchableOpacity>
-        </>
-      )}
+      <Text style={styles.subtitle}>Welcome back! Sign in to continue.</Text>
+
+      <View style={styles.inputContainer}>
+        <FontAwesome name="envelope" size={16} color={COLORS.textSecondary} style={styles.inputIcon} />
+        <TextInput
+          style={styles.input}
+          placeholder="Enter email address"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={email}
+          onChangeText={setEmail}
+        />
+      </View>
+
+      <View style={styles.inputContainer}>
+        <FontAwesome name="lock" size={18} color={COLORS.textSecondary} style={styles.inputIcon} />
+        <TextInput
+          style={styles.input}
+          placeholder="Enter password"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+      </View>
+      
+      <TouchableOpacity style={styles.primaryButton} onPress={handleLogin} disabled={loading}>
+        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Sign In</Text>}
+      </TouchableOpacity>
 
       <View style={styles.dividerContainer}>
         <View style={styles.divider} />
-        <Text style={styles.dividerText}>OR</Text>
+        <Text style={styles.dividerText}>Don't have an account?</Text>
         <View style={styles.divider} />
       </View>
 
-      <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn} disabled={loading}>
-        <FontAwesome name="google" size={20} color="#DB4437" style={styles.googleIcon} />
-        <Text style={styles.googleButtonText}>Continue with Google</Text>
+      <TouchableOpacity style={styles.secondaryButton} onPress={handleSignUp} disabled={loading}>
+        <Text style={styles.secondaryButtonText}>Create Account</Text>
       </TouchableOpacity>
     </View>
   );
@@ -171,20 +121,35 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-    padding: SIZES.lg,
+    paddingHorizontal: SIZES.lg,
     justifyContent: 'center',
   },
+  logoSection: {
+    alignItems: 'center',
+    marginBottom: SIZES.lg,
+  },
+  logo: {
+    width: 140,
+    height: 140,
+    marginBottom: SIZES.sm,
+  },
+  appName: {
+    fontSize: 24,
+    fontFamily: FONTS.bold,
+    color: COLORS.primary,
+  },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 36,
+    fontFamily: FONTS.bold,
     color: COLORS.primary,
     marginBottom: SIZES.sm,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
+    fontFamily: FONTS.regular,
     color: COLORS.textSecondary,
-    marginBottom: SIZES.xl,
+    marginBottom: SIZES.xxl,
     textAlign: 'center',
   },
   inputContainer: {
@@ -193,53 +158,34 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 8,
+    borderRadius: 16,
     marginBottom: SIZES.md,
+    boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.05)',
+    elevation: 2,
   },
-  prefix: {
+  inputIcon: {
     paddingHorizontal: SIZES.md,
-    fontSize: 16,
-    color: COLORS.text,
-    borderRightWidth: 1,
-    borderRightColor: COLORS.border,
   },
   input: {
     flex: 1,
-    padding: SIZES.md,
-    fontSize: 16,
+    padding: SIZES.lg,
+    fontSize: 18,
+    fontFamily: FONTS.medium,
     color: COLORS.text,
-  },
-  inputFull: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    padding: SIZES.md,
-    fontSize: 16,
-    color: COLORS.text,
-    marginBottom: SIZES.md,
-    textAlign: 'center',
-    letterSpacing: 4,
   },
   primaryButton: {
     backgroundColor: COLORS.primary,
-    padding: SIZES.md,
-    borderRadius: 8,
+    padding: 18,
+    borderRadius: 16,
     alignItems: 'center',
     marginBottom: SIZES.lg,
+    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.1)',
+    elevation: 4,
   },
   primaryButtonText: {
     color: COLORS.surface,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  linkButton: {
-    alignItems: 'center',
-    marginBottom: SIZES.lg,
-  },
-  linkText: {
-    color: COLORS.primary,
-    fontSize: 14,
+    fontSize: 18,
+    fontFamily: FONTS.bold,
   },
   dividerContainer: {
     flexDirection: 'row',
@@ -256,22 +202,17 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 14,
   },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  secondaryButton: {
     backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: SIZES.md,
-    borderRadius: 8,
+    borderColor: COLORS.primary,
+    padding: 18,
+    borderRadius: 16,
+    alignItems: 'center',
   },
-  googleIcon: {
-    marginRight: SIZES.sm,
-  },
-  googleButtonText: {
-    color: COLORS.text,
-    fontSize: 16,
-    fontWeight: '600',
+  secondaryButtonText: {
+    color: COLORS.primary,
+    fontSize: 18,
+    fontFamily: FONTS.bold,
   },
 });

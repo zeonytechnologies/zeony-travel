@@ -42,7 +42,6 @@ export const processPayment = async (
       key: RAZORPAY_KEY_ID,
       amount: amountInPaise,
       name: 'Zeony Travel',
-      order_id: orderId,
       prefill: {
         email: user.full_name ? `${user.full_name.replace(' ', '')}@example.com` : 'user@example.com',
         contact: user.phone || '',

@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, ActivityIndicator, ScrollView } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
-import { COLORS, SIZES } from '../../constants/theme';
+import { COLORS, SIZES, FONTS, RADIUS } from '../../constants/theme';
 import * as ImagePicker from 'expo-image-picker';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 
+const LOGO = require('../../assets/images/icon.png');
+
 export default function RegisterScreen() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { user } = useAuth();
 
   const pickImage = async () => {
     try {
@@ -34,27 +37,24 @@ export default function RegisterScreen() {
     }
   };
 
-  const uploadImage = async (uri: string) => {
-    if (!user) throw new Error('No user logged in');
-    
+  const uploadImage = async (uri: string, userId: string) => {
     try {
       const fileExt = uri.split('.').pop() || 'jpg';
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const fileName = `${userId}-${Date.now()}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      // Read file as base64
       const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
       const arrayBuffer = decode(base64);
 
       const { error: uploadError } = await supabase.storage
-        .from('avatars')
+        .from('images')
         .upload(filePath, arrayBuffer, {
           contentType: `image/${fileExt}`,
         });
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      const { data } = supabase.storage.from('images').getPublicUrl(filePath);
       return data.publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -62,48 +62,68 @@ export default function RegisterScreen() {
     }
   };
 
-  const handleSaveProfile = async () => {
-    if (!fullName.trim()) {
-      Alert.alert('Error', 'Please enter your full name');
-      return;
-    }
-
-    if (!user) {
-      Alert.alert('Error', 'Session expired. Please log in again.');
-      router.replace('/(auth)/login');
+  const handleRegister = async () => {
+    if (!email || !password || !fullName.trim()) {
+      Alert.alert('Error', 'Please enter email, password, and full name');
       return;
     }
 
     setLoading(true);
     try {
+      // 1. Create Auth User
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (authError) throw authError;
+
+      const userId = authData.user?.id;
+      if (!userId) throw new Error('Failed to create account');
+
+      // 2. Upload avatar if selected
       let avatarUrl = null;
       if (imageUri) {
-        avatarUrl = await uploadImage(imageUri);
+        avatarUrl = await uploadImage(imageUri, userId);
       }
 
-      const { error } = await supabase
+      // 3. Update profiles table (since trigger might have created it)
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           full_name: fullName,
           avatar_url: avatarUrl,
         })
-        .eq('id', user.id);
+        .eq('id', userId);
 
-      if (error) throw error;
+      // If the row didn't exist because trigger failed, insert it:
+      if (profileError) {
+         await supabase.from('profiles').insert({
+            id: userId,
+            full_name: fullName,
+            avatar_url: avatarUrl
+         });
+      }
 
-      Alert.alert('Success', 'Profile setup completed!');
-      router.replace('/(tabs)/');
+      Alert.alert('Success', 'Account created successfully!');
+      router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save profile');
+      Alert.alert('Error', error.message || 'Failed to register');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Complete Your Profile</Text>
-      <Text style={styles.subtitle}>Just a few more details to get started.</Text>
+    <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.container}>
+      {/* Logo */}
+      <View style={styles.logoSection}>
+        <Image source={LOGO} style={styles.logo} resizeMode="contain" />
+        <Text style={styles.appName}>Zeony Travels</Text>
+      </View>
+
+      <Text style={styles.title}>Create Account</Text>
+      <Text style={styles.subtitle}>Join Zeony Travels today.</Text>
 
       <TouchableOpacity style={styles.avatarContainer} onPress={pickImage}>
         {imageUri ? (
@@ -119,6 +139,27 @@ export default function RegisterScreen() {
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
+          placeholder="Email address"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={email}
+          onChangeText={setEmail}
+        />
+      </View>
+
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+      </View>
+
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.input}
           placeholder="Full Name"
           value={fullName}
           onChangeText={setFullName}
@@ -126,29 +167,53 @@ export default function RegisterScreen() {
         />
       </View>
 
-      <TouchableOpacity style={styles.primaryButton} onPress={handleSaveProfile} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Save Profile</Text>}
+      <TouchableOpacity style={styles.primaryButton} onPress={handleRegister} disabled={loading}>
+        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Sign Up</Text>}
       </TouchableOpacity>
-    </View>
+      
+      <TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.signInLink}>
+         <Text style={styles.signInLinkText}>Already have an account? <Text style={{ fontFamily: FONTS.bold }}>Sign In</Text></Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollContainer: {
     flex: 1,
     backgroundColor: COLORS.background,
-    padding: SIZES.lg,
+  },
+  container: {
+    paddingHorizontal: SIZES.lg,
+    paddingVertical: SIZES.xl,
     justifyContent: 'center',
+    flexGrow: 1,
+  },
+  logoSection: {
+    alignItems: 'center',
+    marginBottom: SIZES.md,
+  },
+  logo: {
+    width: 110,
+    height: 110,
+    marginBottom: SIZES.xs,
+  },
+  appName: {
+    fontSize: 20,
+    fontFamily: FONTS.bold,
+    color: COLORS.primary,
+    marginBottom: SIZES.sm,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 32,
+    fontFamily: FONTS.bold,
     color: COLORS.primary,
     marginBottom: SIZES.sm,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
+    fontFamily: FONTS.regular,
     color: COLORS.textSecondary,
     marginBottom: SIZES.xl,
     textAlign: 'center',
@@ -179,23 +244,37 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 8,
+    borderRadius: 16,
     marginBottom: SIZES.lg,
+    boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.05)',
+    elevation: 2,
   },
   input: {
-    padding: SIZES.md,
-    fontSize: 16,
+    padding: 18,
+    fontSize: 18,
+    fontFamily: FONTS.medium,
     color: COLORS.text,
   },
   primaryButton: {
     backgroundColor: COLORS.primary,
-    padding: SIZES.md,
-    borderRadius: 8,
+    padding: 18,
+    borderRadius: 16,
     alignItems: 'center',
+    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.1)',
+    elevation: 4,
   },
   primaryButtonText: {
     color: COLORS.surface,
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontFamily: FONTS.bold,
+  },
+  signInLink: {
+    marginTop: SIZES.lg,
+    alignItems: 'center',
+  },
+  signInLinkText: {
+    color: COLORS.textSecondary,
+    fontFamily: FONTS.medium,
+    fontSize: 14,
   },
 });

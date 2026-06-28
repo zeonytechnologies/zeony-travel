@@ -1,13 +1,67 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import {
+  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
+  Alert, ScrollView, TextInput, Platform
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Listing } from '../../types';
-import { COLORS, SIZES } from '../../constants/theme';
-import { FontAwesome } from '@expo/vector-icons';
-import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import { COLORS, SIZES, FONTS, RADIUS } from '../../constants/theme';
+import { FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import { processPayment } from '../../lib/razorpay';
 import { useAuth } from '../../hooks/useAuth';
+
+// Web-compatible date input component
+function DateInput({ label, value, onChange, minDate }: { label: string; value: Date; onChange: (d: Date) => void; minDate?: Date }) {
+  const dateStr = value.toISOString().split('T')[0];
+  const minStr = minDate ? minDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={dateStyles.wrapper}>
+        <Text style={dateStyles.label}>{label}</Text>
+        {/* @ts-ignore */}
+        <input
+          type="date"
+          value={dateStr}
+          min={minStr}
+          onChange={(e: any) => { if (e.target.value) onChange(new Date(e.target.value)); }}
+          style={{
+            border: `1.5px solid ${COLORS.border}`,
+            borderRadius: 12,
+            padding: '12px 14px',
+            fontSize: 15,
+            fontFamily: 'Outfit',
+            color: COLORS.text,
+            backgroundColor: COLORS.surface,
+            width: '100%',
+            outline: 'none',
+            cursor: 'pointer',
+          }}
+        />
+      </View>
+    );
+  }
+
+  // Native fallback (kept for mobile)
+  return (
+    <TouchableOpacity style={dateStyles.nativeBtn}>
+      <Text style={dateStyles.label}>{label}</Text>
+      <Text style={dateStyles.nativeDate}>{value.toLocaleDateString('en-IN')}</Text>
+    </TouchableOpacity>
+  );
+}
+
+const dateStyles = StyleSheet.create({
+  wrapper: { flex: 1 },
+  label: { fontSize: 12, fontFamily: FONTS.medium, color: COLORS.textSecondary, marginBottom: 6 },
+  nativeBtn: {
+    flex: 1, backgroundColor: COLORS.surface,
+    padding: SIZES.md, borderRadius: RADIUS.md,
+    borderWidth: 1.5, borderColor: COLORS.border,
+  },
+  nativeDate: { fontSize: 15, fontFamily: FONTS.semiBold, color: COLORS.text, marginTop: 4 },
+});
 
 export default function BookingScreen() {
   const { id } = useLocalSearchParams();
@@ -17,15 +71,15 @@ export default function BookingScreen() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
-  // Booking state
   const [checkIn, setCheckIn] = useState<Date>(new Date());
-  const [checkOut, setCheckOut] = useState<Date>(new Date(Date.now() + 86400000)); // Next day
+  const [checkOut, setCheckOut] = useState<Date>(new Date(Date.now() + 86400000));
   const [guests, setGuests] = useState(1);
-  const [isCheckInVisible, setCheckInVisible] = useState(false);
-  const [isCheckOutVisible, setCheckOutVisible] = useState(false);
+  const [phone, setPhone] = useState('');
+  const [specialRequests, setSpecialRequests] = useState('');
 
   useEffect(() => {
-    fetchListing();
+    if (id && id !== '[id]') fetchListing();
+    else setLoading(false);
   }, [id]);
 
   const fetchListing = async () => {
@@ -44,46 +98,31 @@ export default function BookingScreen() {
     }
   };
 
-  const calculateNights = () => {
-    const diffTime = Math.abs(checkOut.getTime() - checkIn.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const nights = Math.max(1, Math.ceil((checkOut.getTime() - checkIn.getTime()) / 86400000));
+  const basePrice = listing ? nights * listing.price_per_night : 0;
+  const taxes = Math.round(basePrice * 0.18);
+  const serviceFee = 500;
+  const totalPrice = basePrice + taxes + serviceFee;
+
+  const handleCheckInChange = (d: Date) => {
+    setCheckIn(d);
+    if (d >= checkOut) setCheckOut(new Date(d.getTime() + 86400000));
   };
 
-  const nights = calculateNights();
-  const totalPrice = listing ? nights * listing.price_per_night : 0;
-
   const handlePayment = async () => {
-    if (!user) {
-      Alert.alert('Error', 'You must be logged in to book');
-      return;
-    }
-    if (nights <= 0) {
-      Alert.alert('Error', 'Check-out date must be after check-in date');
-      return;
-    }
+    if (!user) { Alert.alert('Error', 'You must be logged in to book'); return; }
+    if (nights <= 0) { Alert.alert('Error', 'Check-out must be after check-in'); return; }
 
     setProcessing(true);
-    
-    // Total price in paise (INR)
-    const amountInPaise = totalPrice * 100;
-    
     const result = await processPayment(
-      amountInPaise,
-      { ...user, full_name: user.email?.split('@')[0] || 'User', role: 'user', id: user.id, avatar_url: null, phone: null, created_at: '' }, // Type cast workaround
-      {
-        listingId: listing?.id,
-        listingTitle: listing?.title,
-        checkIn: checkIn.toISOString().split('T')[0],
-        checkOut: checkOut.toISOString().split('T')[0],
-        guests,
-        totalPrice,
-      }
+      totalPrice * 100,
+      { ...user, full_name: user.email?.split('@')[0] || 'User', role: 'user', id: user.id, avatar_url: null, phone: phone || null, created_at: '' },
+      { listingId: listing?.id, listingTitle: listing?.title, checkIn: checkIn.toISOString().split('T')[0], checkOut: checkOut.toISOString().split('T')[0], guests, totalPrice }
     );
-
     setProcessing(false);
 
     if (result.success) {
-      Alert.alert('Success', 'Booking confirmed!');
+      Alert.alert('🎉 Booking Confirmed!', 'Your booking has been confirmed successfully.');
       router.replace('/(tabs)/bookings');
     } else {
       Alert.alert('Payment Failed', result.error);
@@ -100,100 +139,141 @@ export default function BookingScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <FontAwesome name="chevron-left" size={20} color={COLORS.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Confirm Booking</Text>
-        </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
-        <View style={styles.card}>
-          <Text style={styles.listingTitle}>{listing.title}</Text>
-          <Text style={styles.listingLocation}>{listing.location}</Text>
-        </View>
-
-        <Text style={styles.sectionTitle}>Select Dates</Text>
-        
-        <View style={styles.dateRow}>
-          <TouchableOpacity style={styles.dateButton} onPress={() => setCheckInVisible(true)}>
-            <Text style={styles.dateLabel}>Check-In</Text>
-            <Text style={styles.dateText}>{checkIn.toLocaleDateString()}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.dateButton} onPress={() => setCheckOutVisible(true)}>
-            <Text style={styles.dateLabel}>Check-Out</Text>
-            <Text style={styles.dateText}>{checkOut.toLocaleDateString()}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <DateTimePickerModal
-          isVisible={isCheckInVisible}
-          mode="date"
-          minimumDate={new Date()}
-          onConfirm={(date) => {
-            setCheckIn(date);
-            setCheckInVisible(false);
-            if (date >= checkOut) {
-              setCheckOut(new Date(date.getTime() + 86400000));
-            }
-          }}
-          onCancel={() => setCheckInVisible(false)}
-        />
-        
-        <DateTimePickerModal
-          isVisible={isCheckOutVisible}
-          mode="date"
-          minimumDate={new Date(checkIn.getTime() + 86400000)}
-          onConfirm={(date) => {
-            setCheckOut(date);
-            setCheckOutVisible(false);
-          }}
-          onCancel={() => setCheckOutVisible(false)}
-        />
-
-        <Text style={styles.sectionTitle}>Guests</Text>
-        <View style={styles.guestSelector}>
-          <TouchableOpacity 
-            style={styles.guestButton} 
-            onPress={() => setGuests(Math.max(1, guests - 1))}
-          >
-            <FontAwesome name="minus" size={16} color={COLORS.primary} />
-          </TouchableOpacity>
-          <Text style={styles.guestCount}>{guests}</Text>
-          <TouchableOpacity 
-            style={[styles.guestButton, guests >= listing.max_guests && styles.guestButtonDisabled]} 
-            onPress={() => setGuests(Math.min(listing.max_guests, guests + 1))}
-            disabled={guests >= listing.max_guests}
-          >
-            <FontAwesome name="plus" size={16} color={guests >= listing.max_guests ? COLORS.border : COLORS.primary} />
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.maxGuestsInfo}>Maximum {listing.max_guests} guests allowed</Text>
-
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Price Breakdown</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryText}>₹{listing.price_per_night} x {nights} nights</Text>
-            <Text style={styles.summaryText}>₹{totalPrice}</Text>
+        {/* Listing Summary */}
+        <View style={styles.listingCard}>
+          <View style={styles.listingInfo}>
+            <Text style={styles.listingTitle}>{listing.title}</Text>
+            <View style={styles.listingLocationRow}>
+              <FontAwesome name="map-marker" size={12} color={COLORS.primary} />
+              <Text style={styles.listingLocation}>{listing.location}, {listing.city}</Text>
+            </View>
           </View>
-          <View style={styles.divider} />
-          <View style={styles.summaryRow}>
-            <Text style={styles.totalText}>Total</Text>
-            <Text style={styles.totalPrice}>₹{totalPrice}</Text>
+          <View style={styles.listingPricePill}>
+            <Text style={styles.listingPriceAmount}>₹{listing.price_per_night.toLocaleString('en-IN')}</Text>
+            <Text style={styles.listingPriceUnit}>/night</Text>
           </View>
         </View>
+
+        {/* Dates Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            <FontAwesome name="calendar" size={16} color={COLORS.primary} />  Select Dates
+          </Text>
+          <View style={styles.datesRow}>
+            <DateInput label="Check-In" value={checkIn} onChange={handleCheckInChange} />
+            <View style={styles.dateArrow}>
+              <FontAwesome name="arrow-right" size={14} color={COLORS.textMuted} />
+            </View>
+            <DateInput label="Check-Out" value={checkOut} onChange={setCheckOut} minDate={new Date(checkIn.getTime() + 86400000)} />
+          </View>
+          <View style={styles.nightsBadge}>
+            <MaterialCommunityIcons name="weather-night" size={14} color={COLORS.primary} />
+            <Text style={styles.nightsBadgeText}>{nights} night{nights > 1 ? 's' : ''}</Text>
+          </View>
+        </View>
+
+        {/* Guests */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            <FontAwesome name="users" size={16} color={COLORS.primary} />  Guests
+          </Text>
+          <View style={styles.guestRow}>
+            <TouchableOpacity style={styles.guestBtn} onPress={() => setGuests(Math.max(1, guests - 1))}>
+              <FontAwesome name="minus" size={14} color={guests <= 1 ? COLORS.border : COLORS.primary} />
+            </TouchableOpacity>
+            <Text style={styles.guestCount}>{guests}</Text>
+            <TouchableOpacity
+              style={[styles.guestBtn, guests >= listing.max_guests && styles.guestBtnDisabled]}
+              onPress={() => setGuests(Math.min(listing.max_guests, guests + 1))}
+              disabled={guests >= listing.max_guests}
+            >
+              <FontAwesome name="plus" size={14} color={guests >= listing.max_guests ? COLORS.border : COLORS.primary} />
+            </TouchableOpacity>
+            <Text style={styles.maxGuestsText}>Max {listing.max_guests}</Text>
+          </View>
+        </View>
+
+        {/* Contact Details */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            <FontAwesome name="user" size={16} color={COLORS.primary} />  Contact Details
+          </Text>
+          <View style={styles.inputField}>
+            <FontAwesome name="envelope" size={14} color={COLORS.textMuted} />
+            <Text style={styles.inputValue}>{user?.email || 'Not set'}</Text>
+          </View>
+          <View style={styles.inputWrapper}>
+            <FontAwesome name="phone" size={14} color={COLORS.textMuted} style={styles.inputIcon} />
+            <TextInput
+              style={styles.textInput}
+              placeholder="Phone number (optional)"
+              placeholderTextColor={COLORS.textMuted}
+              keyboardType="phone-pad"
+              value={phone}
+              onChangeText={setPhone}
+            />
+          </View>
+          <View style={styles.inputWrapper}>
+            <FontAwesome name="commenting-o" size={14} color={COLORS.textMuted} style={styles.inputIcon} />
+            <TextInput
+              style={[styles.textInput, styles.textArea]}
+              placeholder="Special requests (optional)"
+              placeholderTextColor={COLORS.textMuted}
+              multiline
+              numberOfLines={3}
+              value={specialRequests}
+              onChangeText={setSpecialRequests}
+            />
+          </View>
+        </View>
+
+        {/* Price Breakdown */}
+        <View style={styles.priceCard}>
+          <Text style={styles.sectionTitle}>Price Breakdown</Text>
+          <View style={styles.priceRow}>
+            <Text style={styles.priceRowLabel}>₹{listing.price_per_night.toLocaleString()} × {nights} nights</Text>
+            <Text style={styles.priceRowValue}>₹{basePrice.toLocaleString('en-IN')}</Text>
+          </View>
+          <View style={styles.priceRow}>
+            <Text style={styles.priceRowLabel}>Taxes (18% GST)</Text>
+            <Text style={styles.priceRowValue}>₹{taxes.toLocaleString('en-IN')}</Text>
+          </View>
+          <View style={styles.priceRow}>
+            <Text style={styles.priceRowLabel}>Service fee</Text>
+            <Text style={styles.priceRowValue}>₹{serviceFee.toLocaleString('en-IN')}</Text>
+          </View>
+          <View style={styles.priceDivider} />
+          <View style={styles.priceRow}>
+            <Text style={styles.priceTotalLabel}>Total (INR)</Text>
+            <Text style={styles.priceTotalValue}>₹{totalPrice.toLocaleString('en-IN')}</Text>
+          </View>
+
+          {/* Cancellation note */}
+          <View style={styles.cancellationNote}>
+            <FontAwesome name="info-circle" size={13} color={COLORS.success} />
+            <Text style={styles.cancellationText}>Free cancellation before check-in</Text>
+          </View>
+        </View>
+
+        <View style={{ height: 100 }} />
       </ScrollView>
 
+      {/* Pay Button */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity 
-          style={[styles.payButton, processing && styles.payButtonDisabled]} 
-          onPress={handlePayment}
-          disabled={processing}
-        >
+        <View>
+          <Text style={styles.totalLabel}>Total</Text>
+          <Text style={styles.totalValue}>₹{totalPrice.toLocaleString('en-IN')}</Text>
+        </View>
+        <TouchableOpacity style={[styles.payBtn, processing && styles.payBtnDisabled]} onPress={handlePayment} disabled={processing}>
           {processing ? (
-            <ActivityIndicator color={COLORS.surface} />
+            <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.payButtonText}>Proceed to Pay</Text>
+            <>
+              <MaterialCommunityIcons name="lock" size={16} color="#fff" />
+              <Text style={styles.payBtnText}>Pay Securely</Text>
+            </>
           )}
         </TouchableOpacity>
       </View>
@@ -202,168 +282,90 @@ export default function BookingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+  container: { flex: 1, backgroundColor: COLORS.background },
+  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scrollContent: { padding: SIZES.md },
+
+  listingCard: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg,
+    padding: SIZES.md, flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: SIZES.md,
+    borderWidth: 1, borderColor: COLORS.borderLight,
+    boxShadow: '0px 2px 8px rgba(0,103,120,0.07)', elevation: 2,
   },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  listingInfo: { flex: 1, marginRight: SIZES.sm },
+  listingTitle: { fontSize: 16, fontFamily: FONTS.bold, color: COLORS.text, marginBottom: 4 },
+  listingLocationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  listingLocation: { fontSize: 13, fontFamily: FONTS.medium, color: COLORS.textSecondary },
+  listingPricePill: { alignItems: 'center', backgroundColor: COLORS.primaryLight, padding: SIZES.sm, borderRadius: RADIUS.md },
+  listingPriceAmount: { fontSize: 16, fontFamily: FONTS.bold, color: COLORS.primary },
+  listingPriceUnit: { fontSize: 11, fontFamily: FONTS.medium, color: COLORS.textSecondary },
+
+  section: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SIZES.md, marginBottom: SIZES.md, borderWidth: 1, borderColor: COLORS.borderLight },
+  sectionTitle: { fontSize: 16, fontFamily: FONTS.bold, color: COLORS.text, marginBottom: SIZES.md },
+
+  datesRow: { flexDirection: 'row', alignItems: 'center', gap: SIZES.sm },
+  dateArrow: { paddingHorizontal: 4, paddingTop: 20 },
+  nightsBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: COLORS.primaryLight, alignSelf: 'flex-start',
+    paddingHorizontal: 12, paddingVertical: 5, borderRadius: RADIUS.full, marginTop: SIZES.sm,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SIZES.md,
-    paddingTop: 50,
-    backgroundColor: COLORS.surface,
+  nightsBadgeText: { fontSize: 12, fontFamily: FONTS.semiBold, color: COLORS.primary },
+
+  guestRow: { flexDirection: 'row', alignItems: 'center', gap: SIZES.md },
+  guestBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    borderWidth: 1.5, borderColor: COLORS.border,
+    justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.surface,
   },
-  backButton: {
-    padding: SIZES.sm,
-    marginRight: SIZES.sm,
+  guestBtnDisabled: { borderColor: COLORS.borderLight },
+  guestCount: { fontSize: 22, fontFamily: FONTS.bold, color: COLORS.text, minWidth: 36, textAlign: 'center' },
+  maxGuestsText: { fontSize: 12, fontFamily: FONTS.medium, color: COLORS.textMuted, marginLeft: 4 },
+
+  inputField: {
+    flexDirection: 'row', alignItems: 'center', gap: SIZES.sm,
+    backgroundColor: COLORS.surfaceAlt, padding: SIZES.sm,
+    borderRadius: RADIUS.md, marginBottom: SIZES.sm,
+    borderWidth: 1, borderColor: COLORS.borderLight,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text,
+  inputValue: { fontSize: 14, fontFamily: FONTS.medium, color: COLORS.textSecondary },
+  inputWrapper: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    backgroundColor: COLORS.surface, borderWidth: 1.5, borderColor: COLORS.border,
+    borderRadius: RADIUS.md, paddingHorizontal: SIZES.sm, marginBottom: SIZES.sm,
   },
-  card: {
-    backgroundColor: COLORS.surface,
-    padding: SIZES.md,
-    margin: SIZES.md,
-    borderRadius: 12,
+  inputIcon: { marginTop: 14, marginRight: SIZES.sm },
+  textInput: { flex: 1, fontSize: 15, fontFamily: FONTS.medium, color: COLORS.text, paddingVertical: 12 },
+  textArea: { height: 80, textAlignVertical: 'top' },
+
+  priceCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SIZES.md, marginBottom: SIZES.md, borderWidth: 1, borderColor: COLORS.borderLight },
+  priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  priceRowLabel: { fontSize: 14, fontFamily: FONTS.medium, color: COLORS.textSecondary },
+  priceRowValue: { fontSize: 14, fontFamily: FONTS.semiBold, color: COLORS.text },
+  priceDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: SIZES.sm },
+  priceTotalLabel: { fontSize: 16, fontFamily: FONTS.bold, color: COLORS.text },
+  priceTotalValue: { fontSize: 20, fontFamily: FONTS.bold, color: COLORS.primary },
+  cancellationNote: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: SIZES.sm,
+    backgroundColor: '#ECFDF5', padding: SIZES.sm, borderRadius: RADIUS.sm,
   },
-  listingTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text,
-  },
-  listingLocation: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginTop: SIZES.xs,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginLeft: SIZES.md,
-    marginTop: SIZES.md,
-    marginBottom: SIZES.sm,
-  },
-  dateRow: {
-    flexDirection: 'row',
-    paddingHorizontal: SIZES.md,
-  },
-  dateButton: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    padding: SIZES.md,
-    borderRadius: 8,
-    marginHorizontal: SIZES.xs,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  dateLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  dateText: {
-    fontSize: 16,
-    color: COLORS.text,
-    fontWeight: '600',
-    marginTop: SIZES.xs,
-  },
-  guestSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    marginHorizontal: SIZES.md,
-    borderRadius: 8,
-    padding: SIZES.sm,
-    width: 150,
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  guestButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  guestButtonDisabled: {
-    backgroundColor: COLORS.background,
-  },
-  guestCount: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text,
-  },
-  maxGuestsInfo: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginLeft: SIZES.md,
-    marginTop: SIZES.xs,
-  },
-  summaryCard: {
-    backgroundColor: COLORS.surface,
-    margin: SIZES.md,
-    padding: SIZES.md,
-    borderRadius: 12,
-    marginTop: SIZES.xl,
-  },
-  summaryTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: SIZES.md,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SIZES.sm,
-  },
-  summaryText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: SIZES.sm,
-  },
-  totalText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.text,
-  },
-  totalPrice: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
+  cancellationText: { fontSize: 12, fontFamily: FONTS.medium, color: COLORS.success },
+
   bottomBar: {
-    padding: SIZES.md,
-    paddingBottom: SIZES.xl,
-    backgroundColor: COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: COLORS.surface, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: SIZES.lg, paddingVertical: SIZES.md,
+    paddingBottom: Platform.OS === 'ios' ? SIZES.xl : SIZES.md,
+    borderTopWidth: 1, borderTopColor: COLORS.border,
+    boxShadow: '0px -2px 10px rgba(0,0,0,0.06)', elevation: 10,
   },
-  payButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: SIZES.md,
-    borderRadius: 12,
-    alignItems: 'center',
+  totalLabel: { fontSize: 12, fontFamily: FONTS.medium, color: COLORS.textSecondary },
+  totalValue: { fontSize: 20, fontFamily: FONTS.bold, color: COLORS.primary },
+  payBtn: {
+    backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: SIZES.xl, paddingVertical: 14, borderRadius: RADIUS.lg,
   },
-  payButtonDisabled: {
-    opacity: 0.7,
-  },
-  payButtonText: {
-    color: COLORS.surface,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  payBtnDisabled: { opacity: 0.7 },
+  payBtnText: { color: '#fff', fontFamily: FONTS.bold, fontSize: 16 },
 });
