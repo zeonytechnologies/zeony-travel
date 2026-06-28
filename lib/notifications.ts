@@ -1,20 +1,34 @@
-import * as Notifications from 'expo-notifications';
+// Push notifications are dynamically required to prevent Expo Go crashes
 import * as Device from 'expo-device';
 import { supabase } from './supabase';
 import { Platform } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+let Notifications: any = null;
+let notificationsEnabled = false;
+
+if (Platform.OS !== 'web' && !isExpoGo) {
+  try {
+    Notifications = require('expo-notifications');
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    notificationsEnabled = true;
+  } catch (e) {
+    console.warn("Notifications native module not found.");
+  }
+}
 
 export async function registerForPushNotifications(userId: string) {
-  if (!Device.isDevice) return;
+  if (!Device.isDevice || Platform.OS === 'web' || !notificationsEnabled) return;
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
   
@@ -38,10 +52,14 @@ export async function registerForPushNotifications(userId: string) {
 }
 
 export async function sendLocalNotification(title: string, body: string) {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web' || !notificationsEnabled) return;
   
-  await Notifications.scheduleNotificationAsync({
-    content: { title, body },
-    trigger: null, // trigger immediately
-  });
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body },
+      trigger: null, // trigger immediately
+    });
+  } catch (e) {
+    console.warn("Local notification failed", e);
+  }
 }

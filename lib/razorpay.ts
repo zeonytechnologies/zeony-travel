@@ -2,9 +2,12 @@ import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import { sendLocalNotification } from './notifications';
 import { Profile } from '../types';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 let RazorpayCheckout: any;
-if (Platform.OS !== 'web') {
+if (Platform.OS !== 'web' && !isExpoGo) {
   try {
     RazorpayCheckout = require('react-native-razorpay').default;
   } catch (e) {
@@ -69,12 +72,10 @@ export const processPayment = async (
         });
         razorpay.open();
       });
+    } else if (!isExpoGo && RazorpayCheckout && typeof RazorpayCheckout.open === 'function') {
+      paymentData = await RazorpayCheckout.open(options);
     } else {
-      if (RazorpayCheckout) {
-        paymentData = await RazorpayCheckout.open(options);
-      } else {
-        throw new Error('Razorpay is not supported in Expo Go. Please test on Web or build a Dev Client.');
-      }
+      throw new Error('Razorpay native module is not linked correctly. Please test on Web, or build a custom Dev Client (APK).');
     }
     
     // On Success:
