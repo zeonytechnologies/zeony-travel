@@ -5,7 +5,11 @@ import { Profile } from '../types';
 
 let RazorpayCheckout: any;
 if (Platform.OS !== 'web') {
-  RazorpayCheckout = require('react-native-razorpay').default;
+  try {
+    RazorpayCheckout = require('react-native-razorpay').default;
+  } catch (e) {
+    console.warn("react-native-razorpay not linked. Are you using Expo Go?");
+  }
 }
 
 export const RAZORPAY_KEY_ID = 'rzp_test_SoNU3WPAitKTgk';
@@ -66,7 +70,11 @@ export const processPayment = async (
         razorpay.open();
       });
     } else {
-      paymentData = await RazorpayCheckout.open(options);
+      if (RazorpayCheckout) {
+        paymentData = await RazorpayCheckout.open(options);
+      } else {
+        throw new Error('Razorpay is not supported in Expo Go. Please test on Web or build a Dev Client.');
+      }
     }
     
     // On Success:
