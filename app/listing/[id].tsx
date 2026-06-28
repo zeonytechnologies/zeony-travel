@@ -170,8 +170,12 @@ export default function ListingDetailScreen() {
                     />
                   </MapplsGL.MapView>
                 ) : (
-                  <View style={[styles.map, { justifyContent: 'center', alignItems: 'center' }]}>
-                    <Text style={{ color: COLORS.textSecondary }}>Mappls Map is not supported on Web</Text>
+                  <View style={[styles.map, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f2f5', borderWidth: 1, borderColor: '#e1e4e8', borderRadius: 12 }]}>
+                    <FontAwesome name="map-marker" size={40} color={COLORS.primary} style={{ marginBottom: 10 }} />
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 16, fontWeight: '500' }}>Map View</Text>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginTop: 4, textAlign: 'center', paddingHorizontal: 20 }}>
+                      Interactive maps are available on the mobile app.
+                    </Text>
                   </View>
                 )}
               </View>

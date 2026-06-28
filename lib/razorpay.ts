@@ -1,9 +1,28 @@
-import RazorpayCheckout from 'react-native-razorpay';
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import { sendLocalNotification } from './notifications';
 import { Profile } from '../types';
 
+let RazorpayCheckout: any;
+if (Platform.OS !== 'web') {
+  RazorpayCheckout = require('react-native-razorpay').default;
+}
+
 export const RAZORPAY_KEY_ID = 'rzp_test_SoNU3WPAitKTgk';
+
+const loadRazorpayWebScript = () => {
+  return new Promise((resolve) => {
+    if (Platform.OS !== 'web' || (window as any).Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
 
 export const processPayment = async (
   amountInPaise: number,
@@ -11,18 +30,9 @@ export const processPayment = async (
   bookingDetails: any
 ) => {
   try {
-    // 1. Create order via Supabase Edge Function (mocked or actual endpoint)
-    // Replace with your actual edge function URL and logic
-    /*
-    const { data: orderData, error: orderError } = await supabase.functions.invoke('create-razorpay-order', {
-      body: { amount: amountInPaise, receipt: `receipt_${Date.now()}` }
-    });
-    if (orderError) throw orderError;
-    const orderId = orderData.id;
-    */
+    await loadRazorpayWebScript();
     
-    // For now, we proceed with a dummy order ID or let Razorpay generate it if allowed without server
-    // In production, an order MUST be generated on the server.
+    // 1. Create order ID
     const orderId = `order_${Date.now()}`; 
 
     const options = {
@@ -41,12 +51,29 @@ export const processPayment = async (
       theme: { color: '#000000' }
     };
 
-    const data = await RazorpayCheckout.open(options);
+    let paymentData: any = {};
+
+    if (Platform.OS === 'web') {
+      paymentData = await new Promise((resolve, reject) => {
+        const razorpay = new (window as any).Razorpay({
+          ...options,
+          handler: function (response: any) {
+            resolve(response);
+          }
+        });
+        razorpay.on('payment.failed', function (response: any) {
+          reject(response.error);
+        });
+        razorpay.open();
+      });
+    } else {
+      paymentData = await RazorpayCheckout.open(options);
+    }
     
     // On Success:
-    // data.razorpay_payment_id
-    // data.razorpay_order_id
-    // data.razorpay_signature
+    // paymentData.razorpay_payment_id
+    // paymentData.razorpay_order_id
+    // paymentData.razorpay_signature
 
     // 2. Insert into bookings table
     const { data: bookingData, error: bookingError } = await supabase
@@ -59,7 +86,7 @@ export const processPayment = async (
         guests: bookingDetails.guests,
         total_price: bookingDetails.totalPrice,
         status: 'confirmed',
-        payment_id: data.razorpay_payment_id,
+        payment_id: paymentData.razorpay_payment_id,
         payment_status: 'paid',
       })
       .select()
@@ -74,8 +101,8 @@ export const processPayment = async (
         booking_id: bookingData.id,
         amount: bookingDetails.totalPrice,
         currency: 'INR',
-        razorpay_order_id: data.razorpay_order_id,
-        razorpay_payment_id: data.razorpay_payment_id,
+        razorpay_order_id: paymentData.razorpay_order_id,
+        razorpay_payment_id: paymentData.razorpay_payment_id,
         status: 'paid',
       });
 

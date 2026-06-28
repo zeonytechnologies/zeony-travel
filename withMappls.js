@@ -20,13 +20,13 @@ const withMappls = (config) => {
   config = withDangerousMod(config, [
     'android',
     async (config) => {
-      const mainPath = path.join(config.modRequest.platformProjectRoot, 'app', 'src', 'main');
-      if (!fs.existsSync(mainPath)) {
-        fs.mkdirSync(mainPath, { recursive: true });
+      const appPath = path.join(config.modRequest.platformProjectRoot, 'app');
+      if (!fs.existsSync(appPath)) {
+        fs.mkdirSync(appPath, { recursive: true });
       }
       
-      const olfPath = path.join(mainPath, 'mappls.a.olf');
-      const confPath = path.join(mainPath, 'mappls.a.conf');
+      const olfPath = path.join(appPath, 'mappls.a.olf');
+      const confPath = path.join(appPath, 'mappls.a.conf');
       
       // Mappls Gradle plugin expects these files to exist
       if (!fs.existsSync(olfPath)) fs.writeFileSync(olfPath, 'dummy');
