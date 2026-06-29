@@ -1,10 +1,10 @@
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import 'react-native-reanimated';
+
 import { useColorScheme } from '@/components/useColorScheme';
-import { useAuth } from '../hooks/useAuth';
+import { AuthProvider, useAuth } from '../hooks/useAuth';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -34,7 +34,11 @@ export default function RootLayout() {
 
   if (!loaded) return null;
 
-  return <RootLayoutNav />;
+  return (
+    <AuthProvider>
+      <RootLayoutNav />
+    </AuthProvider>
+  );
 }
 
 function RootLayoutNav() {
@@ -43,8 +47,10 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
 
+  const rootNavigationState = useRootNavigationState();
+
   useEffect(() => {
-    if (loading) return;
+    if (loading || !rootNavigationState?.key) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
@@ -55,16 +61,16 @@ function RootLayoutNav() {
       // Redirect away from login if authenticated
       router.replace('/(tabs)');
     }
-  }, [user, loading, segments]);
+  }, [user, loading, segments, rootNavigationState]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="listing/[id]" options={{ title: 'Listing Details' }} />
-        <Stack.Screen name="booking/[id]" options={{ title: 'Confirm Booking' }} />
-        <Stack.Screen name="admin" options={{ headerShown: false }} />
+        <Stack.Screen name="car/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="book/[id]" options={{ title: 'Book Car' }} />
+        <Stack.Screen name="(admin)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
       </Stack>
     </ThemeProvider>

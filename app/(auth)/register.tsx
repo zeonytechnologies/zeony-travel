@@ -62,6 +62,8 @@ export default function RegisterScreen() {
     }
   };
 
+  const { signIn, hashPassword } = useAuth();
+
   const handleRegister = async () => {
     if (!email || !password || !fullName.trim()) {
       Alert.alert('Error', 'Please enter email, password, and full name');
@@ -70,43 +72,40 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      // 1. Create Auth User
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (authError) throw authError;
-
-      const userId = authData.user?.id;
-      if (!userId) throw new Error('Failed to create account');
+      // 1. Hash password
+      const hashedPass = hashPassword(password);
+      
+      // We will generate a UUID on the client side just so we can use it for the image upload before insert
+      const tempUserId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
       // 2. Upload avatar if selected
       let avatarUrl = null;
       if (imageUri) {
-        avatarUrl = await uploadImage(imageUri, userId);
+        avatarUrl = await uploadImage(imageUri, tempUserId);
       }
 
-      // 3. Update profiles table (since trigger might have created it)
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
+      // 3. Insert into car_users
+      const { data, error } = await supabase
+        .from('car_users')
+        .insert({
+          email: email.trim().toLowerCase(),
+          password_hash: hashedPass,
           full_name: fullName,
-          avatar_url: avatarUrl,
+          avatar_url: avatarUrl
         })
-        .eq('id', userId);
+        .select()
+        .single();
 
-      // If the row didn't exist because trigger failed, insert it:
-      if (profileError) {
-         await supabase.from('profiles').insert({
-            id: userId,
-            full_name: fullName,
-            avatar_url: avatarUrl
-         });
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error('An account with this email already exists');
+        }
+        throw error;
       }
-
-      Alert.alert('Success', 'Account created successfully!');
-      router.replace('/(tabs)');
+      if (data) {
+        await signIn(data.id);
+        // _layout.tsx will automatically redirect to (tabs)
+      }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to register');
     } finally {
@@ -119,11 +118,10 @@ export default function RegisterScreen() {
       {/* Logo */}
       <View style={styles.logoSection}>
         <Image source={LOGO} style={styles.logo} resizeMode="contain" />
-        <Text style={styles.appName}>Zeony Travels</Text>
+        <Text style={styles.appName}>Zeony Car Rentals</Text>
       </View>
-
       <Text style={styles.title}>Create Account</Text>
-      <Text style={styles.subtitle}>Join Zeony Travels today.</Text>
+      <Text style={styles.subtitle}>Join Zeony Car Rentals today.</Text>
 
       <TouchableOpacity style={styles.avatarContainer} onPress={pickImage}>
         {imageUri ? (
@@ -245,8 +243,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 16,
-    marginBottom: SIZES.lg,
-    boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.05)',
+    marginBottom: SIZES.md,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5,
     elevation: 2,
   },
   input: {
@@ -259,8 +257,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     padding: 18,
     borderRadius: 16,
-    alignItems: 'center',
-    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.1)',
+    marginBottom: SIZES.lg,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
     elevation: 4,
   },
   primaryButtonText: {

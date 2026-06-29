@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Zeony Travel",
-    "slug": "zeony-travel",
+    "name": "Zeony Car Rentals",
+    "slug": "zeony-cars",
     "newArchEnabled": false,
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "zeonytravel",
+    "scheme": "zeonycars",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -14,11 +14,11 @@
       "backgroundColor": "#000000"
     },
     "ios": {
-      "supportsTablet": false,
-      "bundleIdentifier": "com.zeonytechnologies.travel"
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zeony.cars"
     },
     "android": {
-      "package": "com.zeonytechnologies.travel",
+      "package": "com.zeony.cars",
       "versionCode": 1,
       "icon": "./assets/images/icon.png",
       "predictiveBackGestureEnabled": false,
@@ -61,7 +61,14 @@
           "photosPermission": "Allow Zeony Travel to access your photos."
         }
       ],
-      "expo-build-properties"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "ndkVersion": "26.1.10909125"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

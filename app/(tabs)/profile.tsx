@@ -4,7 +4,7 @@ import {
   Alert, ScrollView, ActivityIndicator, Platform
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
@@ -12,19 +12,18 @@ import { COLORS, SIZES, FONTS, RADIUS } from '../../constants/theme';
 import { FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Profile } from '../../types';
+import { CarUser } from '../../types';
 
 const MENU_ITEMS = [
-  { icon: 'suitcase', label: 'My Bookings', sublabel: 'View all trips', route: '/(tabs)/bookings', color: COLORS.primary },
-  { icon: 'heart-o', label: 'Saved Places', sublabel: 'Your wishlist', route: null, color: '#E11D48' },
+  { icon: 'car', label: 'My Bookings', sublabel: 'View all rentals', route: '/(tabs)/bookings', color: COLORS.primary },
   { icon: 'bell-o', label: 'Notifications', sublabel: 'Manage alerts', route: null, color: '#D97706' },
   { icon: 'question-circle-o', label: 'Help & Support', sublabel: 'Contact us', route: null, color: '#7C3AED' },
-  { icon: 'info-circle', label: 'About Zeony Travel', sublabel: 'Version 1.0.0', route: null, color: COLORS.textSecondary },
+  { icon: 'info-circle', label: 'About Zeony Car Rentals', sublabel: 'Version 1.0.0', route: null, color: COLORS.textSecondary },
 ];
 
 export default function ProfileScreen() {
   const { user, isAdmin, signOut } = useAuth();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<CarUser | null>(null);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(true);
@@ -39,14 +38,14 @@ export default function ProfileScreen() {
   const fetchProfile = async () => {
     if (!user) return;
     try {
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      if (data) { setProfile(data); setFullName(data.full_name || ''); setPhone(data.phone || ''); }
+      const { data } = await supabase.from('car_users').select('*').eq('id', user.id).maybeSingle();
+      if (data) { setProfile(data as CarUser); setFullName(data.full_name || ''); setPhone(data.phone || ''); }
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
   const fetchBookingCount = async () => {
     if (!user) return;
-    const { count } = await supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
+    const { count } = await supabase.from('car_bookings').select('id', { count: 'exact', head: true }).eq('user_id', user.id);
     setBookingCount(count || 0);
   };
 
@@ -54,7 +53,7 @@ export default function ProfileScreen() {
     if (!user) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from('profiles').upsert({ id: user.id, full_name: fullName, phone }).eq('id', user.id);
+      const { error } = await supabase.from('car_users').update({ full_name: fullName, phone }).eq('id', user.id);
       if (error) throw error;
       Alert.alert('✅ Saved', 'Profile updated successfully');
       setEditMode(false);
@@ -78,7 +77,7 @@ export default function ProfileScreen() {
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.5,
@@ -122,7 +121,7 @@ export default function ProfileScreen() {
       const { data } = supabase.storage.from('images').getPublicUrl(fileName);
       
       const { error: updateError } = await supabase
-        .from('profiles')
+        .from('car_users')
         .update({ avatar_url: data.publicUrl })
         .eq('id', user.id);
         
@@ -154,9 +153,9 @@ export default function ProfileScreen() {
         <View style={styles.headerRow}>
           <Text style={styles.pageTitle}>Profile</Text>
           {isAdmin && (
-            <TouchableOpacity style={styles.adminBadge} onPress={() => router.push('/admin')}>
+            <TouchableOpacity style={styles.adminBadge} onPress={() => router.push('/(admin)')}>
               <FontAwesome name="shield" size={12} color="#fff" />
-              <Text style={styles.adminBadgeText}>Admin</Text>
+              <Text style={styles.adminBadgeText}>Admin Panel</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -187,12 +186,7 @@ export default function ProfileScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
               <Text style={styles.statValue}>{bookingCount}</Text>
-              <Text style={styles.statLabel}>Bookings</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statBox}>
-              <Text style={styles.statValue}>0</Text>
-              <Text style={styles.statLabel}>Reviews</Text>
+              <Text style={styles.statLabel}>Rentals</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statBox}>
@@ -281,7 +275,7 @@ export default function ProfileScreen() {
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
 
-      <Text style={styles.version}>Zeony Travel v1.0.0 · Made with ❤️ in India</Text>
+      <Text style={styles.version}>Zeony Car Rentals v1.0.0</Text>
       <View style={{ height: SIZES.xxl }} />
     </ScrollView>
   );
@@ -315,7 +309,7 @@ const styles = StyleSheet.create({
   section: {
     backgroundColor: COLORS.surface, marginHorizontal: SIZES.md, marginTop: -SIZES.lg,
     borderRadius: RADIUS.xl, padding: SIZES.md, marginBottom: SIZES.md,
-    boxShadow: '0px 2px 12px rgba(0,103,120,0.08)', elevation: 3,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3,
   },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SIZES.md },
   sectionTitle: { fontSize: 16, fontFamily: FONTS.bold, color: COLORS.text },

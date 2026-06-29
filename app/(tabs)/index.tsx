@@ -4,8 +4,8 @@ import {
   RefreshControl, ScrollView, Image, Animated, Easing, Platform
 } from 'react-native';
 import { COLORS, SIZES, FONTS, RADIUS } from '../../constants/theme';
-import { useListings } from '../../hooks/useListings';
-import ListingCard from '../../components/ListingCard';
+import { useCars } from '../../hooks/useCars';
+import CarCard from '../../components/CarCard';
 import { FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
@@ -14,22 +14,13 @@ const LOGO = require('../../assets/images/icon.png');
 const IS_WEB = Platform.OS === 'web';
 
 const FILTERS = [
-  { label: 'All',      icon: 'earth',           value: 'all' },
-  { label: 'Hotels',   icon: 'bed',              value: 'hotel' },
-  { label: 'Tours',    icon: 'map-marker-path',  value: 'tour' },
-  { label: 'Packages', icon: 'package-variant',  value: 'package' },
-];
-
-const POPULAR_CITIES = [
-  { name: 'Mumbai',    icon: 'city',         color: '#3B82F6' },
-  { name: 'Kerala',    icon: 'palm-tree',    color: '#10B981' },
-  { name: 'Goa',       icon: 'beach',        color: '#F59E0B' },
-  { name: 'Rajasthan', icon: 'castle',       color: '#EF4444' },
-  { name: 'Himachal',  icon: 'image-filter-hdr', color: '#8B5CF6' },
+  { label: 'All Cars',   icon: 'car-multiple', value: '' },
+  { label: 'Available',  icon: 'check-circle', value: 'available' },
+  { label: 'Rented',     icon: 'clock-outline',value: 'rented' },
 ];
 
 export default function HomeScreen() {
-  const { listings, loading, search, filterByType, refresh, typeFilter } = useListings();
+  const { cars, loading, search, filterByStatus, refresh, typeFilter } = useCars();
   const [searchInput, setSearchInput] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const insets = useSafeAreaInsets();
@@ -54,13 +45,8 @@ export default function HomeScreen() {
     search(text);
   }, [search]);
 
-  const handleCityPress = (city: string) => {
-    setSearchInput(city);
-    search(city);
-  };
-
   const handleFilter = (value: string) => {
-    filterByType(value === 'all' ? '' : value);
+    filterByStatus(value);
   };
 
   const renderHeader = () => (
@@ -69,7 +55,6 @@ export default function HomeScreen() {
       <View style={styles.heroSection}>
         {/* Top row */}
         <View style={styles.heroTop}>
-          {/* Logo – no Animated on web */}
           {IS_WEB ? (
             <View style={styles.logoCard}>
               <Image source={LOGO} style={styles.logoImage} resizeMode="contain" />
@@ -83,16 +68,15 @@ export default function HomeScreen() {
             </Animated.View>
           )}
 
-          {/* Stats pill */}
           {IS_WEB ? (
             <View style={styles.statsPill}>
-              <Text style={styles.statsNumber}>{listings.length}</Text>
-              <Text style={styles.statsLabel}>Destinations</Text>
+              <Text style={styles.statsNumber}>{cars.length}</Text>
+              <Text style={styles.statsLabel}>Vehicles</Text>
             </View>
           ) : (
             <Animated.View style={[styles.statsPill, { opacity: logoAnim }]}>
-              <Text style={styles.statsNumber}>{listings.length}</Text>
-              <Text style={styles.statsLabel}>Destinations</Text>
+              <Text style={styles.statsNumber}>{cars.length}</Text>
+              <Text style={styles.statsLabel}>Vehicles</Text>
             </Animated.View>
           )}
         </View>
@@ -100,16 +84,16 @@ export default function HomeScreen() {
         {/* Greeting */}
         {IS_WEB ? (
           <View>
-            <Text style={styles.heroGreeting}>Hello, {user?.email?.split('@')[0] || 'Traveller'} 👋</Text>
-            <Text style={styles.heroTitle}>Where to next?</Text>
+            <Text style={styles.heroGreeting}>Hello, {user?.full_name || user?.email?.split('@')[0] || 'Guest'} 👋</Text>
+            <Text style={styles.heroTitle}>Find your perfect ride.</Text>
           </View>
         ) : (
           <Animated.View style={{
             opacity: heroAnim,
             transform: [{ translateY: heroAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
           }}>
-            <Text style={styles.heroGreeting}>Hello, {user?.email?.split('@')[0] || 'Traveller'} 👋</Text>
-            <Text style={styles.heroTitle}>Where to next?</Text>
+            <Text style={styles.heroGreeting}>Hello, {user?.full_name || user?.email?.split('@')[0] || 'Guest'} 👋</Text>
+            <Text style={styles.heroTitle}>Find your perfect ride.</Text>
           </Animated.View>
         )}
 
@@ -119,7 +103,7 @@ export default function HomeScreen() {
             <FontAwesome name="search" size={18} color={searchFocused ? COLORS.primary : COLORS.textMuted} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search destination, city, hotel..."
+              placeholder="Search by car name or brand..."
               placeholderTextColor={COLORS.textMuted}
               value={searchInput}
               onChangeText={handleSearchChange}
@@ -142,7 +126,7 @@ export default function HomeScreen() {
               <FontAwesome name="search" size={18} color={searchFocused ? COLORS.primary : COLORS.textMuted} style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search destination, city, hotel..."
+                placeholder="Search by car name or brand..."
                 placeholderTextColor={COLORS.textMuted}
                 value={searchInput}
                 onChangeText={handleSearchChange}
@@ -160,26 +144,10 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Popular Cities */}
-      <View style={[styles.sectionHeader, { marginTop: SIZES.lg }]}>
-        <Text style={styles.sectionTitle}>Popular Destinations</Text>
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.citiesRow}>
-        {POPULAR_CITIES.map((city, idx) => (
-          <CityChip
-            key={city.name}
-            city={city}
-            idx={idx}
-            isActive={searchInput === city.name}
-            onPress={() => handleCityPress(city.name)}
-          />
-        ))}
-      </ScrollView>
-
       {/* Filter Tabs */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
         {FILTERS.map((f) => {
-          const isActive = (typeFilter === f.value) || (f.value === 'all' && !typeFilter);
+          const isActive = typeFilter === f.value;
           return (
             <TouchableOpacity
               key={f.value}
@@ -196,9 +164,9 @@ export default function HomeScreen() {
       {/* Results Header */}
       <View style={[styles.sectionHeader, { marginTop: SIZES.lg }]}>
         <Text style={styles.sectionTitle}>
-          {searchInput ? `Results for "${searchInput}"` : 'All Listings'}
+          {searchInput ? `Results for "${searchInput}"` : 'Our Fleet'}
         </Text>
-        {!loading && <Text style={styles.resultCount}>{listings.length} found</Text>}
+        {!loading && <Text style={styles.resultCount}>{cars.length} cars</Text>}
       </View>
     </View>
   );
@@ -207,10 +175,10 @@ export default function HomeScreen() {
     if (loading) return null;
     return (
       <View style={styles.emptyContainer}>
-        <MaterialCommunityIcons name="map-search-outline" size={64} color={COLORS.border} />
-        <Text style={styles.emptyTitle}>No results found</Text>
-        <Text style={styles.emptySubtitle}>Try a different search or filter</Text>
-        <TouchableOpacity style={styles.resetButton} onPress={() => { setSearchInput(''); search(''); filterByType(''); }}>
+        <MaterialCommunityIcons name="car-off" size={64} color={COLORS.border} />
+        <Text style={styles.emptyTitle}>No cars found</Text>
+        <Text style={styles.emptySubtitle}>Try adjusting your search or filters</Text>
+        <TouchableOpacity style={styles.resetButton} onPress={() => { setSearchInput(''); search(''); filterByStatus(''); }}>
           <Text style={styles.resetButtonText}>Reset Search</Text>
         </TouchableOpacity>
       </View>
@@ -220,9 +188,9 @@ export default function HomeScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <FlatList
-        data={listings}
+        data={cars}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ListingCard listing={item} />}
+        renderItem={({ item }) => <CarCard car={item} />}
         contentContainerStyle={styles.listContainer}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
@@ -232,55 +200,6 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       />
     </View>
-  );
-}
-
-// City chip — native gets bounce-in animation, web gets plain view
-function CityChip({ city, idx, isActive, onPress }: { city: any; idx: number; isActive: boolean; onPress: () => void }) {
-  const enterAnim = useRef(new Animated.Value(0)).current;
-  const pressAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (IS_WEB) return;
-    Animated.timing(enterAnim, {
-      toValue: 1,
-      duration: 380,
-      delay: 600 + idx * 70,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  const onPressIn  = () => !IS_WEB && Animated.spring(pressAnim, { toValue: 0.92, useNativeDriver: true, speed: 50 }).start();
-  const onPressOut = () => !IS_WEB && Animated.spring(pressAnim, { toValue: 1,    useNativeDriver: true, speed: 50 }).start();
-
-  const chip = (
-    <TouchableOpacity
-      style={[styles.cityChip, isActive && styles.cityChipActive]}
-      onPress={onPress}
-      onPressIn={onPressIn}
-      onPressOut={onPressOut}
-      activeOpacity={IS_WEB ? 0.7 : 1}
-    >
-      <View style={[styles.cityIconBox, { backgroundColor: city.color + '22' }]}>
-        <MaterialCommunityIcons name={city.icon as any} size={22} color={city.color} />
-      </View>
-      <Text style={[styles.cityName, isActive && styles.cityNameActive]}>{city.name}</Text>
-    </TouchableOpacity>
-  );
-
-  if (IS_WEB) return chip;
-
-  return (
-    <Animated.View style={{
-      opacity: enterAnim,
-      transform: [
-        { scale: pressAnim },
-        { translateY: enterAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
-      ],
-    }}>
-      {chip}
-    </Animated.View>
   );
 }
 
@@ -311,7 +230,10 @@ const styles = StyleSheet.create({
     height: 54,
     justifyContent: 'center',
     alignItems: 'center',
-    boxShadow: '0px 4px 14px rgba(0,0,0,0.18)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
     elevation: 6,
   },
   logoImage: { width: 80, height: 46 },
@@ -355,31 +277,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontFamily: FONTS.bold,   color: COLORS.text },
   resultCount:  { fontSize: 13, fontFamily: FONTS.medium, color: COLORS.textSecondary },
 
-  citiesRow: { paddingHorizontal: SIZES.md, paddingVertical: SIZES.xs },
-
-  cityChip: {
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginRight: SIZES.sm,
-    minWidth: 80,
-    boxShadow: '0px 2px 6px rgba(0,0,0,0.06)',
-    elevation: 2,
-  },
-  cityChipActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
-  cityIconBox: {
-    width: 44, height: 44, borderRadius: 22,
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 6,
-  },
-  cityName:       { fontSize: 12, fontFamily: FONTS.semiBold, color: COLORS.textSecondary },
-  cityNameActive: { color: COLORS.primary },
-
-  filterRow: { paddingHorizontal: SIZES.md, paddingVertical: SIZES.xs, marginTop: SIZES.sm },
+  filterRow: { paddingHorizontal: SIZES.md, paddingVertical: SIZES.xs, marginTop: SIZES.md },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',

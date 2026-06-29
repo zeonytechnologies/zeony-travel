@@ -1,5 +1,7 @@
-export type Profile = {
+export type CarUser = {
   id: string;
+  email: string;
+  password_hash: string;
   full_name: string | null;
   phone: string | null;
   avatar_url: string | null;
@@ -7,47 +9,42 @@ export type Profile = {
   created_at: string;
 };
 
-export type Listing = {
+export type Car = {
   id: string;
-  title: string;
+  name: string;
+  brand: string;
   description: string;
-  type: 'hotel' | 'tour' | 'package';
-  location: string;
-  city: string;
-  price_per_night: number;
+  per_day_cost: number;
+  extra_km_cost: number;
   images: string[];
-  amenities: string[];
-  rating: number;
-  review_count: number;
-  max_guests: number;
-  is_active: boolean;
-  latitude: number;
-  longitude: number;
+  features: string[];
+  status: 'available' | 'maintenance' | 'rented';
   created_at: string;
 };
 
-export type Booking = {
+export type CarBooking = {
   id: string;
   user_id: string;
-  listing_id: string;
-  check_in: string;
-  check_out: string;
-  guests: number;
+  car_id: string;
+  start_date: string;
+  end_date: string;
+  total_days: number;
+  expected_kms: number;
   total_price: number;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
-  payment_id: string | null;
+  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
   payment_status: 'unpaid' | 'paid' | 'refunded';
   created_at: string;
-  listing?: Listing; // Joined data
+  
+  // Joined data
+  car?: Car;
+  user?: CarUser;
 };
 
-export type Review = {
+export type CarNotification = {
   id: string;
   user_id: string;
-  listing_id: string;
-  booking_id: string;
-  rating: number;
-  comment: string;
+  title: string;
+  body: string;
+  is_read: boolean;
   created_at: string;
-  profile?: Profile; // Joined data
 };

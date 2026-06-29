@@ -14,6 +14,8 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const { signIn, hashPassword } = useAuth();
+
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Please enter email and password');
@@ -22,16 +24,26 @@ export default function LoginScreen() {
     
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const hashedPass = hashPassword(password);
+      
+      const { data, error } = await supabase
+        .from('car_users')
+        .select('*')
+        .eq('email', email.trim().toLowerCase())
+        .eq('password_hash', hashedPass)
+        .maybeSingle();
 
       if (error) throw error;
       
-      checkProfileAndRedirect(data.user?.id);
+      if (data) {
+        await signIn(data.id);
+        // _layout.tsx will automatically redirect upon state change
+      } else {
+        Alert.alert('Error', 'Invalid email or password');
+      }
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      Alert.alert('Error', error.message || 'Login failed');
+    } finally {
       setLoading(false);
     }
   };
@@ -40,39 +52,12 @@ export default function LoginScreen() {
     router.replace('/(auth)/register');
   };
 
-  const checkProfileAndRedirect = async (userId: string | undefined) => {
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', userId)
-        .single();
-        
-      if (error) throw error;
-      
-      if (!data?.full_name) {
-        router.replace('/(auth)/register');
-      } else {
-        router.replace('/(tabs)');
-      }
-    } catch (error) {
-      console.error(error);
-      router.replace('/(tabs)'); // fallback
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <View style={styles.container}>
       {/* Logo */}
       <View style={styles.logoSection}>
         <Image source={LOGO} style={styles.logo} resizeMode="contain" />
-        <Text style={styles.appName}>Zeony Travels</Text>
+        <Text style={styles.appName}>Zeony Car Rentals</Text>
       </View>
 
       <Text style={styles.subtitle}>Welcome back! Sign in to continue.</Text>
@@ -160,7 +145,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 16,
     marginBottom: SIZES.md,
-    boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.05)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5,
     elevation: 2,
   },
   inputIcon: {
@@ -179,7 +164,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     marginBottom: SIZES.lg,
-    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.1)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8,
     elevation: 4,
   },
   primaryButtonText: {
