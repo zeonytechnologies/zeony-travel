@@ -81,7 +81,7 @@ export default function BookingsScreen() {
       description: `Payment for ${booking.car?.name}`,
       image: booking.car?.images?.[0] || 'https://i.imgur.com/3g7nmJC.png',
       currency: 'INR',
-      key: 'rzp_test_YOUR_TEST_KEY', // Replace with real key
+      key: 'rzp_test_SoNU3WPAitKTgk', // Replace with real key
       amount: booking.total_price * 100, // Amount in paise
       name: 'Zeony Car Rentals',
       prefill: {
