@@ -82,10 +82,10 @@ export default function BookingsScreen() {
       image: booking.car?.images?.[0] || 'https://i.imgur.com/3g7nmJC.png',
       currency: 'INR',
       key: 'rzp_test_SoNU3WPAitKTgk', // Replace with real key
-      amount: booking.total_price * 100, // Amount in paise
+      amount: Math.round(Number(booking.total_price) * 100), // Amount in paise, must be integer
       name: 'Zeony Car Rentals',
       prefill: {
-        email: user.email,
+        email: user.email || 'test@example.com',
         contact: user.phone || '9999999999',
         name: user.full_name || 'Customer'
       },
